@@ -115,11 +115,36 @@ function renderResults(data) {
   displayResults('Phone Numbers', data.phones);
 }
 
+function isScriptableUrl(url) {
+  if (!url) return false;
+  const blockedPrefixes = [
+    'chrome://',
+    'chrome-extension://',
+    'devtools://',
+    'edge://',
+    'about:',
+    'view-source:',
+  ];
+  if (blockedPrefixes.some((p) => url.startsWith(p))) return false;
+  // Chrome Web Store and extension gallery pages are blocked from scripting.
+  if (url.includes('chromewebstore.google.com') || url.includes('chrome.google.com/webstore')) return false;
+  return /^https?:\/\//i.test(url);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-    const tabId = tabs?.[0]?.id;
+    const tab = tabs?.[0];
+    const tabId = tab?.id;
+    const tabUrl = tab?.url || '';
+
     if (!tabId) {
       showError('No active tab available.');
+      return;
+    }
+
+    if (!isScriptableUrl(tabUrl)) {
+      showError('Scanning is blocked on this page type. Open a normal website tab and try again.');
+      document.getElementById('results').textContent = 'No results.';
       return;
     }
 
