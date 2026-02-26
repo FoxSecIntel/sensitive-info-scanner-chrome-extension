@@ -3,6 +3,8 @@ function uniqueSorted(items) {
 }
 
 function scanPageForSensitiveInfo() {
+  const uniqueSortedLocal = (items) => Array.from(new Set((items || []).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+
   const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
   const ipRegex = /\b((25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\.){3}(25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\b/g;
   const keywordRegex = /(password|secret|api[-_]?key|token|internal)/gi;
@@ -11,10 +13,10 @@ function scanPageForSensitiveInfo() {
   const bodyText = (document.body && document.body.innerText) ? document.body.innerText : '';
 
   return {
-    emails: uniqueSorted(bodyText.match(emailRegex)),
-    ips: uniqueSorted(bodyText.match(ipRegex)),
-    keywords: uniqueSorted((bodyText.match(keywordRegex) || []).map((x) => x.toLowerCase())),
-    phones: uniqueSorted(bodyText.match(phoneRegex)),
+    emails: uniqueSortedLocal(bodyText.match(emailRegex)),
+    ips: uniqueSortedLocal(bodyText.match(ipRegex)),
+    keywords: uniqueSortedLocal((bodyText.match(keywordRegex) || []).map((x) => x.toLowerCase())),
+    phones: uniqueSortedLocal(bodyText.match(phoneRegex)),
   };
 }
 
