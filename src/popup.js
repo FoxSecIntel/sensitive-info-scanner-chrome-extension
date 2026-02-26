@@ -1,137 +1,155 @@
-// Function to scan the page for sensitive information
-function scanPageForSensitiveInfo() {
-  try {
-    const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-    const ipRegex = /\b((25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\.){3}(25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\b/g;
-    const keywordRegex = /(password|secret|api[-_]?key|token|internal)/gi;
-    const phoneRegex = /(\+[\d\s.-]{7,15})|\b(06[\s.-]?\d{8})\b/g;
-
-    const bodyText = document.body.innerText;
-
-    const foundEmails = bodyText.match(emailRegex);
-    const foundIPs = bodyText.match(ipRegex);
-    const foundKeywords = bodyText.match(keywordRegex);
-    const foundPhones = bodyText.match(phoneRegex);
-    
-    return {
-      emails: foundEmails || [],
-      ips: foundIPs || [],
-      keywords: foundKeywords || [],
-      phones: foundPhones || [],  // Fixed missing comma
-    };
-  } catch (error) {
-    console.error('Error scanning page for sensitive information:', error);
-    alert('An error occurred while scanning the page.');
-    return {
-      emails: [],
-      ips: [],
-      keywords: [],
-      phones: [],
-    };
-  }
+function uniqueSorted(items) {
+  return Array.from(new Set((items || []).filter(Boolean))).sort((a, b) => a.localeCompare(b));
 }
 
-// Function to copy text to clipboard with feedback
+function scanPageForSensitiveInfo() {
+  const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+  const ipRegex = /\b((25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\.){3}(25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\b/g;
+  const keywordRegex = /(password|secret|api[-_]?key|token|internal)/gi;
+  const phoneRegex = /(\+[\d\s.-]{7,15})|\b(06[\s.-]?\d{8})\b/g;
+
+  const bodyText = (document.body && document.body.innerText) ? document.body.innerText : '';
+
+  return {
+    emails: uniqueSorted(bodyText.match(emailRegex)),
+    ips: uniqueSorted(bodyText.match(ipRegex)),
+    keywords: uniqueSorted((bodyText.match(keywordRegex) || []).map((x) => x.toLowerCase())),
+    phones: uniqueSorted(bodyText.match(phoneRegex)),
+  };
+}
+
+function showError(msg) {
+  document.getElementById('error').textContent = msg;
+}
+
 function copyToClipboard(text, button) {
   navigator.clipboard.writeText(text).then(() => {
     const originalText = button.textContent;
     button.textContent = 'Copied!';
-    button.style.backgroundColor = '#28a745';  // Change to green
+    button.style.backgroundColor = '#28a745';
     setTimeout(() => {
       button.textContent = originalText;
-      button.style.backgroundColor = '';  // Reset color
-    }, 2000);  // Reset after 2 seconds
+      button.style.backgroundColor = '';
+    }, 1200);
+  }).catch((err) => {
+    console.error('Clipboard failed:', err);
   });
 }
 
-// Function to export data to CSV
-function exportToCSV(data) {
-  const csvRows = [];
-  const headers = ['Category', 'Value'];
-  csvRows.push(headers.join(','));
+function escapeCsv(value) {
+  const s = String(value ?? '');
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
 
-  const addRow = (category, items) => {
-    items.forEach(item => {
-      csvRows.push(`"${category}","${item}"`);
+function download(name, content, type) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportToCSV(data) {
+  const csvRows = ['Category,Value'];
+  const addRows = (category, items) => items.forEach((item) => csvRows.push(`${escapeCsv(category)},${escapeCsv(item)}`));
+  addRows('Emails', data.emails);
+  addRows('IP Addresses', data.ips);
+  addRows('Keywords', data.keywords);
+  addRows('Phone Numbers', data.phones);
+  download('sensitive_info.csv', `${csvRows.join('\n')}\n`, 'text/csv');
+}
+
+function exportToJSON(data) {
+  download('sensitive_info.json', `${JSON.stringify(data, null, 2)}\n`, 'application/json');
+}
+
+function allItems(data) {
+  return [
+    ...data.emails.map((x) => `email:${x}`),
+    ...data.ips.map((x) => `ip:${x}`),
+    ...data.keywords.map((x) => `keyword:${x}`),
+    ...data.phones.map((x) => `phone:${x}`),
+  ].join('\n');
+}
+
+function renderResults(data) {
+  const resultElement = document.getElementById('results');
+  resultElement.innerHTML = '';
+
+  const displayResults = (title, items) => {
+    const titleElement = document.createElement('h4');
+    titleElement.textContent = `${title} (${items.length})`;
+    resultElement.appendChild(titleElement);
+
+    if (items.length === 0) {
+      const noFinding = document.createElement('div');
+      noFinding.textContent = 'No findings';
+      resultElement.appendChild(noFinding);
+      return;
+    }
+
+    items.forEach((item) => {
+      const resultItem = document.createElement('div');
+      resultItem.className = 'result-item';
+
+      const resultText = document.createElement('span');
+      resultText.className = 'result-text';
+      resultText.textContent = item;
+
+      const copyBtn = document.createElement('button');
+      copyBtn.className = 'copy-btn';
+      copyBtn.textContent = 'Copy';
+      copyBtn.addEventListener('click', () => copyToClipboard(item, copyBtn));
+
+      resultItem.appendChild(resultText);
+      resultItem.appendChild(copyBtn);
+      resultElement.appendChild(resultItem);
     });
   };
 
-  addRow('Emails', data.emails);
-  addRow('IP Addresses', data.ips);
-  addRow('Keywords', data.keywords);
-  addRow('Phone Numbers', data.phones);
-
-  const csvContent = csvRows.join('\n');
-  const blob = new Blob([csvContent], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.setAttribute('href', url);
-  a.setAttribute('download', 'sensitive_info.csv');
-  a.click();
+  displayResults('Emails', data.emails);
+  displayResults('IP Addresses', data.ips);
+  displayResults('Keywords', data.keywords);
+  displayResults('Phone Numbers', data.phones);
 }
 
-// Automatically execute the scan when the popup loads
-chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
-  chrome.scripting.executeScript({
-    target: {tabId: tabs[0].id},
-    function: scanPageForSensitiveInfo
-  }, (results) => {
-    const resultElement = document.getElementById('results');
-    const data = results[0].result;
+document.addEventListener('DOMContentLoaded', () => {
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    const tabId = tabs?.[0]?.id;
+    if (!tabId) {
+      showError('No active tab available.');
+      return;
+    }
 
-    // Clear the existing content
-    resultElement.innerHTML = '';
+    chrome.scripting.executeScript(
+      {
+        target: { tabId },
+        func: scanPageForSensitiveInfo,
+      },
+      (results) => {
+        if (chrome.runtime.lastError) {
+          showError(`Scan blocked on this page: ${chrome.runtime.lastError.message}`);
+          document.getElementById('results').textContent = 'No results.';
+          return;
+        }
 
-    const displayResults = (title, items) => {
-      const titleElement = document.createElement('h4');
-      titleElement.textContent = `${title} (${items.length})`;  // Show count in title
-      resultElement.appendChild(titleElement);
+        const data = results?.[0]?.result;
+        if (!data) {
+          showError('No scan data returned from page context.');
+          document.getElementById('results').textContent = 'No results.';
+          return;
+        }
 
-      if (items.length === 0) {
-        const noFinding = document.createElement('div');
-        noFinding.textContent = 'No findings';
-        resultElement.appendChild(noFinding);
-      } else {
-        items.forEach(item => {
-          const resultItem = document.createElement('div');
-          resultItem.className = 'result-item';
+        renderResults(data);
 
-          const resultText = document.createElement('span');
-          resultText.textContent = item;
-
-          const copyBtn = document.createElement('button');
-          copyBtn.className = 'copy-btn';
-          copyBtn.textContent = 'Copy';
-          copyBtn.addEventListener('click', () => copyToClipboard(item, copyBtn));
-
-          resultItem.appendChild(resultText);
-          resultItem.appendChild(copyBtn);
-          resultElement.appendChild(resultItem);
-        });
+        document.getElementById('copyAllBtn').onclick = () => {
+          navigator.clipboard.writeText(allItems(data)).catch((err) => console.error(err));
+        };
+        document.getElementById('exportCsvBtn').onclick = () => exportToCSV(data);
+        document.getElementById('exportJsonBtn').onclick = () => exportToJSON(data);
       }
-    };
-
-    displayResults('Emails', data.emails);
-    displayResults('IP Addresses', data.ips);
-    displayResults('Keywords', data.keywords);
-    displayResults('Phone Numbers', data.phones);
-
-    // Add the Export All button with improved styling and placement
-    const exportBtnContainer = document.createElement('div');
-    exportBtnContainer.style.marginTop = '20px';  // Add some space above the button
-    exportBtnContainer.style.textAlign = 'center';  // Center the button
-
-    const exportBtn = document.createElement('button');
-    exportBtn.textContent = 'Export All to CSV';
-    exportBtn.style.padding = '10px 20px';
-    exportBtn.style.backgroundColor = '#007bff';
-    exportBtn.style.color = '#fff';
-    exportBtn.style.border = 'none';
-    exportBtn.style.borderRadius = '5px';
-    exportBtn.style.cursor = 'pointer';
-    exportBtn.addEventListener('click', () => exportToCSV(data));
-
-    exportBtnContainer.appendChild(exportBtn);
-    resultElement.appendChild(exportBtnContainer);
+    );
   });
 });

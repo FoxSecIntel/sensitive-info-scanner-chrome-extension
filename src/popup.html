@@ -3,34 +3,27 @@
 <head>
   <title>Sensitive Info Scanner</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      padding: 10px;
-      width: 300px;
-    }
-    #results {
-      white-space: pre-wrap;
-      background-color: #f4f4f4;
-      padding: 10px;
-      border-radius: 5px;
-      border: 1px solid #ddd;
-    }
-    .result-item {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 5px;
-    }
-    .copy-btn {
-      margin-left: 10px;
-      cursor: pointer;
-    }
+    body { font-family: Arial, sans-serif; padding: 10px; width: 360px; }
+    h3 { margin-top: 0; }
+    #error { color: #b00020; font-size: 12px; margin-bottom: 8px; }
+    #results { white-space: pre-wrap; background-color: #f4f4f4; padding: 10px; border-radius: 5px; border: 1px solid #ddd; }
+    .result-item { display: flex; justify-content: space-between; margin-bottom: 5px; gap: 8px; }
+    .result-text { word-break: break-all; }
+    .copy-btn { margin-left: 10px; cursor: pointer; }
+    .controls { display: flex; gap: 8px; margin-bottom: 8px; }
+    button { padding: 6px 10px; border: none; border-radius: 4px; cursor: pointer; }
   </style>
 </head>
 <body>
   <h3>Scan Results</h3>
+  <div class="controls">
+    <button id="copyAllBtn">Copy All</button>
+    <button id="exportCsvBtn">Export CSV</button>
+    <button id="exportJsonBtn">Export JSON</button>
+  </div>
+  <div id="error"></div>
   <div id="results">Scanning...</div>
 
   <script src="popup.js"></script>
 </body>
 </html>
-
