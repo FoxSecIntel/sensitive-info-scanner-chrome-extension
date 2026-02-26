@@ -160,12 +160,13 @@ document.addEventListener('DOMContentLoaded', () => {
           return;
         }
 
-        const data = results?.[0]?.result;
-        if (!data) {
+        if (!Array.isArray(results) || !results[0] || !results[0].result) {
           showError('No scan data returned from page context.');
           document.getElementById('results').textContent = 'No results.';
           return;
         }
+
+        const data = results[0].result;
 
         renderResults(data);
 
