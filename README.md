@@ -39,14 +39,19 @@ src/
 
 ## Installation
 
-### Option 1: Load unpacked
+### Option 1: Chrome Web Store
+
+Install directly from:
+https://chromewebstore.google.com/detail/sensitive-info-scanner/ffamfmimbigjgkcklmminjpjaennplml?pli=1
+
+### Option 2: Load unpacked
 
 1. Open Chrome and go to `chrome://extensions/`
 2. Enable **Developer mode**
 3. Click **Load unpacked**
 4. Select the `src` folder
 
-### Option 2: Store package build
+### Option 3: Store package build
 
 Package from inside `src` so `manifest.json` is at ZIP root:
 
