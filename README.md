@@ -1,4 +1,4 @@
-![Version](https://img.shields.io/badge/version-1.1.15-blue)
+![Version](https://img.shields.io/badge/version-1.1.16-blue)
 
 # Sensitive Info Scanner Chrome Extension
 

@@ -190,7 +190,17 @@ function renderResults(data) {
 
       const meta = document.createElement('div');
       meta.className = 'result-meta';
-      meta.textContent = `confidence=${item.confidence || 'unknown'} | ${item.snippet || ''}`;
+
+      const confidence = (item.confidence || 'unknown').toLowerCase();
+      const confPill = document.createElement('span');
+      confPill.className = `confidence-pill confidence-${confidence}`;
+      confPill.textContent = confidence;
+
+      const snippet = document.createElement('span');
+      snippet.textContent = ` ${item.snippet || ''}`;
+
+      meta.appendChild(confPill);
+      meta.appendChild(snippet);
 
       block.appendChild(resultText);
       block.appendChild(meta);

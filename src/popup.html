@@ -5,12 +5,23 @@
   <style>
     body { font-family: Arial, sans-serif; padding: 10px; width: 360px; }
     h3 { margin-top: 0; }
+    .legend { font-size: 12px; margin-bottom: 8px; display: flex; gap: 10px; }
+    .legend-item { display: inline-flex; align-items: center; gap: 5px; color: #333; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+    .dot-high { background: #c0392b; }
+    .dot-medium { background: #f39c12; }
+    .dot-low { background: #27ae60; }
     #error { color: #b00020; font-size: 12px; margin-bottom: 8px; }
     #results { white-space: pre-wrap; background-color: #f4f4f4; padding: 10px; border-radius: 5px; border: 1px solid #ddd; }
     .result-item { display: flex; justify-content: space-between; margin-bottom: 8px; gap: 8px; }
     .result-block { display: flex; flex-direction: column; gap: 3px; }
     .result-text { word-break: break-all; font-weight: 600; }
-    .result-meta { font-size: 11px; color: #555; word-break: break-word; }
+    .result-meta { font-size: 11px; color: #555; word-break: break-word; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .confidence-pill { display: inline-block; padding: 1px 6px; border-radius: 999px; font-size: 10px; font-weight: 700; text-transform: lowercase; }
+    .confidence-high { background: #fde8e6; color: #a93226; border: 1px solid #f5b7b1; }
+    .confidence-medium { background: #fff4e5; color: #a35a00; border: 1px solid #ffd8a8; }
+    .confidence-low { background: #e9f7ef; color: #1e8449; border: 1px solid #abebc6; }
+    .confidence-unknown { background: #f2f3f4; color: #5d6d7e; border: 1px solid #d5d8dc; }
     .copy-btn { margin-left: 10px; cursor: pointer; }
     .controls { display: flex; gap: 8px; margin-bottom: 8px; }
     button { padding: 6px 10px; border: none; border-radius: 4px; cursor: pointer; }
@@ -18,6 +29,11 @@
 </head>
 <body>
   <h3>Scan Results</h3>
+  <div class="legend">
+    <span class="legend-item"><span class="dot dot-high"></span> High</span>
+    <span class="legend-item"><span class="dot dot-medium"></span> Medium</span>
+    <span class="legend-item"><span class="dot dot-low"></span> Low</span>
+  </div>
   <div class="controls">
     <button id="copyAllBtn">Copy All</button>
     <button id="exportCsvBtn">Export CSV</button>
