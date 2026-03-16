@@ -27,6 +27,10 @@ It is intended for triage and investigation support, not as a full DLP solution.
 - Export findings to CSV and JSON
 - Local processing in browser context
 
+## Screenshot
+
+![Sensitive Info Scanner popup UI](docs/media/sensitive-scanner-ui.jpg)
+
 ## Project structure
 
 ```text
