@@ -22,52 +22,63 @@ function collectWithSnippets(text, regex, category, confidence, normaliser) {
 }
 
 function scanPageForSensitiveInfo() {
-  const bodyText = (document.body && document.body.innerText) ? document.body.innerText : '';
+  try {
+    const bodyText = (document.body && document.body.innerText) ? document.body.innerText : '';
 
-  const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-  const ipRegex = /\b((25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\.){3}(25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\b/g;
-  const phoneRegex = /(\+[\d\s.-]{7,15})|\b(06[\s.-]?\d{8})\b/g;
+    const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+    const ipRegex = /\b((25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\.){3}(25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\b/g;
+    const phoneRegex = /(\+[\d\s.-]{7,15})|\b(06[\s.-]?\d{8})\b/g;
 
-  const highKeywordRegex = /(api[-_ ]?key|secret[-_ ]?key|private[-_ ]?key|authorization\s*:\s*bearer|bearer\s+[a-z0-9\-_.]+|passwd|password)/gi;
-  const mediumKeywordRegex = /(token|secret|credential|auth\s?token)/gi;
-  const lowKeywordRegex = /(internal)/gi;
+    const highKeywordRegex = /(api[-_ ]?key|secret[-_ ]?key|private[-_ ]?key|authorization\s*:\s*bearer|bearer\s+[a-z0-9\-_.]+|passwd|password)/gi;
+    const mediumKeywordRegex = /(token|secret|credential|auth\s?token)/gi;
+    const lowKeywordRegex = /(internal)/gi;
 
-  const emails = collectWithSnippets(
-    bodyText,
-    emailRegex,
-    'email',
-    'high',
-    (v) => v.toLowerCase()
-  ).filter((x) => !x.value.endsWith('@example.com') && !x.value.startsWith('noreply@'));
+    const emails = collectWithSnippets(
+      bodyText,
+      emailRegex,
+      'email',
+      'high',
+      (v) => v.toLowerCase()
+    ).filter((x) => !x.value.endsWith('@example.com') && !x.value.startsWith('noreply@'));
 
-  const ips = collectWithSnippets(bodyText, ipRegex, 'ip', 'medium');
-  const phones = collectWithSnippets(bodyText, phoneRegex, 'phone', 'medium', (v) => v.trim());
+    const ips = collectWithSnippets(bodyText, ipRegex, 'ip', 'medium');
+    const phones = collectWithSnippets(bodyText, phoneRegex, 'phone', 'medium', (v) => v.trim());
 
-  const keywords = [
-    ...collectWithSnippets(bodyText, highKeywordRegex, 'keyword', 'high', (v) => v.toLowerCase()),
-    ...collectWithSnippets(bodyText, mediumKeywordRegex, 'keyword', 'medium', (v) => v.toLowerCase()),
-    ...collectWithSnippets(bodyText, lowKeywordRegex, 'keyword', 'low', (v) => v.toLowerCase()),
-  ];
+    const keywords = [
+      ...collectWithSnippets(bodyText, highKeywordRegex, 'keyword', 'high', (v) => v.toLowerCase()),
+      ...collectWithSnippets(bodyText, mediumKeywordRegex, 'keyword', 'medium', (v) => v.toLowerCase()),
+      ...collectWithSnippets(bodyText, lowKeywordRegex, 'keyword', 'low', (v) => v.toLowerCase()),
+    ];
 
-  const keywordMap = new Map();
-  for (const k of keywords) {
-    const existing = keywordMap.get(k.value);
-    if (!existing) {
-      keywordMap.set(k.value, k);
-      continue;
+    const keywordMap = new Map();
+    for (const k of keywords) {
+      const existing = keywordMap.get(k.value);
+      if (!existing) {
+        keywordMap.set(k.value, k);
+        continue;
+      }
+      const rank = { high: 3, medium: 2, low: 1 };
+      if (rank[k.confidence] > rank[existing.confidence]) {
+        keywordMap.set(k.value, k);
+      }
     }
-    const rank = { high: 3, medium: 2, low: 1 };
-    if (rank[k.confidence] > rank[existing.confidence]) {
-      keywordMap.set(k.value, k);
-    }
+
+    return {
+      emails,
+      ips,
+      keywords: Array.from(keywordMap.values()).sort((a, b) => a.value.localeCompare(b.value)),
+      phones,
+      _scan_error: null,
+    };
+  } catch (e) {
+    return {
+      emails: [],
+      ips: [],
+      keywords: [],
+      phones: [],
+      _scan_error: String(e && e.message ? e.message : e),
+    };
   }
-
-  return {
-    emails,
-    ips,
-    keywords: Array.from(keywordMap.values()).sort((a, b) => a.value.localeCompare(b.value)),
-    phones,
-  };
 }
 
 function showError(msg) {
@@ -227,13 +238,17 @@ document.addEventListener('DOMContentLoaded', () => {
           return;
         }
 
-        if (!Array.isArray(results) || !results[0] || !results[0].result) {
+        if (!Array.isArray(results) || !results[0]) {
           showError('No scan data returned from page context.');
           document.getElementById('results').textContent = 'No results.';
           return;
         }
 
-        const data = results[0].result;
+        const data = results[0].result || { emails: [], ips: [], keywords: [], phones: [], _scan_error: 'empty_result' };
+
+        if (data._scan_error) {
+          showError(`Page scan error: ${data._scan_error}`);
+        }
 
         renderResults(data);
 
