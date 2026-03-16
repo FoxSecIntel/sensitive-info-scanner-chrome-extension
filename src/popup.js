@@ -278,15 +278,39 @@ function renderResults(data) {
   const resultElement = document.getElementById('results');
   resultElement.innerHTML = '';
 
+  const headerIcon = {
+    'Emails': '✉',
+    'IP Addresses': '🌐',
+    'Keywords': '🔎',
+    'Phone Numbers': '☎',
+  };
+
+  const copySvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 1H6a2 2 0 0 0-2 2v12h2V3h10V1zm3 4H10a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H10V7h9v14z"/></svg>';
+
   const displayResults = (title, items) => {
-    const titleElement = document.createElement('h4');
-    titleElement.textContent = `${title} (${items.length})`;
-    resultElement.appendChild(titleElement);
+    const card = document.createElement('div');
+    card.className = 'category-card';
+
+    const header = document.createElement('div');
+    header.className = 'category-header';
+
+    const icon = document.createElement('span');
+    icon.className = 'category-icon';
+    icon.textContent = headerIcon[title] || '•';
+
+    const label = document.createElement('span');
+    label.textContent = `${title} (${items.length})`;
+
+    header.appendChild(icon);
+    header.appendChild(label);
+    card.appendChild(header);
 
     if (items.length === 0) {
       const noFinding = document.createElement('div');
+      noFinding.className = 'empty-state';
       noFinding.textContent = 'No findings';
-      resultElement.appendChild(noFinding);
+      card.appendChild(noFinding);
+      resultElement.appendChild(card);
       return;
     }
 
@@ -327,15 +351,17 @@ function renderResults(data) {
 
       const copyBtn = document.createElement('button');
       copyBtn.className = 'copy-btn';
-      copyBtn.textContent = 'Copy';
+      copyBtn.innerHTML = copySvg;
       copyBtn.title = 'Copy value';
       copyBtn.setAttribute('aria-label', `Copy ${item.value}`);
       copyBtn.addEventListener('click', () => copyToClipboard(item.value, copyBtn));
 
       resultItem.appendChild(block);
       resultItem.appendChild(copyBtn);
-      resultElement.appendChild(resultItem);
+      card.appendChild(resultItem);
     });
+
+    resultElement.appendChild(card);
   };
 
   displayResults('Emails', data.emails);

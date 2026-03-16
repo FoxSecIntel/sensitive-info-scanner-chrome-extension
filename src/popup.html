@@ -14,10 +14,13 @@
     .dot-low { background: #27ae60; }
     #error { color: #b00020; font-size: 12px; margin-bottom: 8px; }
     #results { white-space: pre-wrap; background-color: #f4f4f4; padding: 10px; border-radius: 5px; border: 1px solid #ddd; }
-    #results h4 { margin: 14px 0 8px; font-size: 19px; font-weight: 800; letter-spacing: 0.2px; border-bottom: 1px solid #d8d8d8; padding-bottom: 4px; }
-    .result-item { display: flex; justify-content: space-between; margin-bottom: 10px; gap: 8px; padding: 6px 0; border-bottom: 1px dashed #e2e2e2; }
+    .category-card { border: 1px solid #dee2e6; border-radius: 8px; background: #fff; padding: 8px; margin-bottom: 10px; }
+    .category-header { display: flex; align-items: center; gap: 6px; color: #6c757d; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; margin: 0 0 8px; }
+    .category-icon { width: 14px; text-align: center; opacity: 0.9; }
+    .result-item { display: flex; justify-content: space-between; margin-bottom: 8px; gap: 8px; padding: 6px 0; border-bottom: 1px dashed #e2e2e2; }
+    .result-item:last-child { border-bottom: none; margin-bottom: 0; }
     .result-block { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
-    .result-text { word-break: break-all; font-weight: 600; font-size: 16px; }
+    .result-text { word-break: break-all; font-weight: 700; font-size: 14px; color: #000000; }
     .result-meta { font-size: 11px; color: #555; word-break: break-word; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
     .confidence-pill { display: inline-block; padding: 1px 6px; border-radius: 999px; font-size: 10px; font-weight: 700; text-transform: lowercase; }
     .confidence-critical { background: #f6dfe0; color: #6e1111; border: 1px solid #d8a2a4; }
@@ -25,7 +28,10 @@
     .confidence-medium { background: #fff4e5; color: #a35a00; border: 1px solid #ffd8a8; }
     .confidence-low { background: #e9f7ef; color: #1e8449; border: 1px solid #abebc6; }
     .confidence-unknown { background: #f2f3f4; color: #5d6d7e; border: 1px solid #d5d8dc; }
-    .copy-btn { margin-left: 8px; cursor: pointer; min-width: 44px; width: 44px; padding: 4px 6px; font-size: 11px; line-height: 1.2; background: #eceff1; }
+    .empty-state { color: #adb5bd; font-style: italic; font-size: 12px; }
+    .copy-btn { margin-left: 8px; cursor: pointer; min-width: 28px; width: 28px; height: 28px; padding: 4px; font-size: 11px; line-height: 1; background: #f1f3f5; display: inline-flex; align-items: center; justify-content: center; }
+    .copy-btn:hover { background: #e2e6ea; }
+    .copy-btn svg { width: 14px; height: 14px; fill: #495057; }
     .finding-badge { display: inline-block; padding: 1px 6px; border-radius: 999px; font-size: 10px; font-weight: 700; background: #e8f0fe; color: #1f3b73; border: 1px solid #c7d8ff; }
     .controls { display: flex; gap: 6px; margin-bottom: 8px; }
     button { padding: 5px 8px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; }
