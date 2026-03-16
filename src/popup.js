@@ -293,7 +293,7 @@ function renderResults(data) {
 
       const copyBtn = document.createElement('button');
       copyBtn.className = 'copy-btn';
-      copyBtn.innerHTML = '📋';
+      copyBtn.textContent = '⎘';
       copyBtn.title = 'Copy value';
       copyBtn.setAttribute('aria-label', `Copy ${item.value}`);
       copyBtn.addEventListener('click', () => copyToClipboard(item.value, copyBtn));
