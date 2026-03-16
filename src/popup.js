@@ -175,18 +175,52 @@ function showError(msg) {
   document.getElementById('error').textContent = msg;
 }
 
-function copyToClipboard(text, button) {
-  navigator.clipboard.writeText(text).then(() => {
-    const originalText = button.textContent;
-    button.textContent = '✔';
-    button.style.backgroundColor = '#28a745';
-    setTimeout(() => {
-      button.textContent = originalText;
-      button.style.backgroundColor = '';
-    }, 1000);
-  }).catch((err) => {
-    console.error('Clipboard failed:', err);
-  });
+async function writeClipboardSafe(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // fallback below
+    }
+  }
+
+  try {
+    const area = document.createElement('textarea');
+    area.value = text;
+    area.setAttribute('readonly', '');
+    area.style.position = 'fixed';
+    area.style.left = '-9999px';
+    document.body.appendChild(area);
+    area.focus();
+    area.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(area);
+    return !!ok;
+  } catch {
+    return false;
+  }
+}
+
+async function copyToClipboard(text, button) {
+  const originalText = button.textContent;
+  const ok = await writeClipboardSafe(text);
+
+  if (ok) {
+    button.textContent = 'Done';
+    button.style.backgroundColor = '#2e7d32';
+    button.style.color = '#fff';
+  } else {
+    button.textContent = 'Fail';
+    button.style.backgroundColor = '#b00020';
+    button.style.color = '#fff';
+  }
+
+  setTimeout(() => {
+    button.textContent = originalText;
+    button.style.backgroundColor = '';
+    button.style.color = '';
+  }, 900);
 }
 
 function escapeCsv(value) {
@@ -368,8 +402,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         renderResults(data);
 
-        document.getElementById('copyAllBtn').onclick = () => {
-          navigator.clipboard.writeText(allItems(data)).catch((err) => console.error(err));
+        document.getElementById('copyAllBtn').onclick = async () => {
+          const btn = document.getElementById('copyAllBtn');
+          const original = btn.textContent;
+          const ok = await writeClipboardSafe(allItems(data));
+          btn.textContent = ok ? 'Copied' : 'Failed';
+          setTimeout(() => { btn.textContent = original; }, 900);
         };
         document.getElementById('exportCsvBtn').onclick = () => exportToCSV(data);
         document.getElementById('exportJsonBtn').onclick = () => exportToJSON(data);
