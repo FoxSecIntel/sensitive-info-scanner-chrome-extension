@@ -278,13 +278,6 @@ function renderResults(data) {
   const resultElement = document.getElementById('results');
   resultElement.innerHTML = '';
 
-  const headerIcon = {
-    'Emails': '✉',
-    'IP Addresses': '🌐',
-    'Keywords': '🔎',
-    'Phone Numbers': '☎',
-  };
-
   const copySvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 1H6a2 2 0 0 0-2 2v12h2V3h10V1zm3 4H10a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H10V7h9v14z"/></svg>';
 
   const displayResults = (title, items) => {
@@ -294,14 +287,9 @@ function renderResults(data) {
     const header = document.createElement('div');
     header.className = 'category-header';
 
-    const icon = document.createElement('span');
-    icon.className = 'category-icon';
-    icon.textContent = headerIcon[title] || '•';
-
     const label = document.createElement('span');
     label.textContent = `${title} (${items.length})`;
 
-    header.appendChild(icon);
     header.appendChild(label);
     card.appendChild(header);
 
