@@ -23,6 +23,25 @@ function collectWithSnippets(text, regex, category, confidence, normaliser) {
 
 function scanPageForSensitiveInfo() {
   try {
+    const collectWithSnippetsLocal = (text, regex, category, confidence, normaliser) => {
+      const out = [];
+      const seen = new Set();
+      let m;
+      while ((m = regex.exec(text)) !== null) {
+        const raw = m[0];
+        const value = normaliser ? normaliser(raw) : raw;
+        if (!value || seen.has(value)) continue;
+        seen.add(value);
+
+        const start = Math.max(0, m.index - 30);
+        const end = Math.min(text.length, m.index + raw.length + 30);
+        const snippet = text.slice(start, end).replace(/\s+/g, ' ').trim();
+
+        out.push({ category, value, confidence, snippet });
+      }
+      return out.sort((a, b) => a.value.localeCompare(b.value));
+    };
+
     const bodyText = (document.body && document.body.innerText) ? document.body.innerText : '';
 
     const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
@@ -33,7 +52,7 @@ function scanPageForSensitiveInfo() {
     const mediumKeywordRegex = /(token|secret|credential|auth\s?token)/gi;
     const lowKeywordRegex = /(internal)/gi;
 
-    const emails = collectWithSnippets(
+    const emails = collectWithSnippetsLocal(
       bodyText,
       emailRegex,
       'email',
@@ -41,13 +60,13 @@ function scanPageForSensitiveInfo() {
       (v) => v.toLowerCase()
     ).filter((x) => !x.value.endsWith('@example.com') && !x.value.startsWith('noreply@'));
 
-    const ips = collectWithSnippets(bodyText, ipRegex, 'ip', 'medium');
-    const phones = collectWithSnippets(bodyText, phoneRegex, 'phone', 'medium', (v) => v.trim());
+    const ips = collectWithSnippetsLocal(bodyText, ipRegex, 'ip', 'medium');
+    const phones = collectWithSnippetsLocal(bodyText, phoneRegex, 'phone', 'medium', (v) => v.trim());
 
     const keywords = [
-      ...collectWithSnippets(bodyText, highKeywordRegex, 'keyword', 'high', (v) => v.toLowerCase()),
-      ...collectWithSnippets(bodyText, mediumKeywordRegex, 'keyword', 'medium', (v) => v.toLowerCase()),
-      ...collectWithSnippets(bodyText, lowKeywordRegex, 'keyword', 'low', (v) => v.toLowerCase()),
+      ...collectWithSnippetsLocal(bodyText, highKeywordRegex, 'keyword', 'high', (v) => v.toLowerCase()),
+      ...collectWithSnippetsLocal(bodyText, mediumKeywordRegex, 'keyword', 'medium', (v) => v.toLowerCase()),
+      ...collectWithSnippetsLocal(bodyText, lowKeywordRegex, 'keyword', 'low', (v) => v.toLowerCase()),
     ];
 
     const keywordMap = new Map();
