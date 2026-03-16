@@ -1,29 +1,29 @@
-function uniqueSorted(items) {
-  return Array.from(new Set((items || []).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+function decodeSnippet(text) {
+  const value = String(text || '');
+  // Decode URL-encoded snippets safely for analyst readability.
+  try {
+    return decodeURIComponent(value.replace(/%(?![0-9A-Fa-f]{2})/g, '%25'));
+  } catch {
+    return value;
+  }
 }
 
-function collectWithSnippets(text, regex, category, confidence, normaliser) {
-  const out = [];
-  const seen = new Set();
-  let m;
-  while ((m = regex.exec(text)) !== null) {
-    const raw = m[0];
-    const value = normaliser ? normaliser(raw) : raw;
-    if (!value || seen.has(value)) continue;
-    seen.add(value);
+function riskRank(level) {
+  const rank = { critical: 4, high: 3, medium: 2, low: 1, unknown: 0 };
+  return rank[String(level || 'unknown').toLowerCase()] ?? 0;
+}
 
-    const start = Math.max(0, m.index - 30);
-    const end = Math.min(text.length, m.index + raw.length + 30);
-    const snippet = text.slice(start, end).replace(/\s+/g, ' ').trim();
-
-    out.push({ category, value, confidence, snippet });
-  }
-  return out.sort((a, b) => a.value.localeCompare(b.value));
+function sortFindings(items) {
+  return [...(items || [])].sort((a, b) => {
+    const r = riskRank(b.risk_level) - riskRank(a.risk_level);
+    if (r !== 0) return r;
+    return String(a.value || '').localeCompare(String(b.value || ''));
+  });
 }
 
 function scanPageForSensitiveInfo() {
   try {
-    const collectWithSnippetsLocal = (text, regex, category, confidence, normaliser) => {
+    const collectWithSnippetsLocal = (text, regex, category, riskLevel, normaliser) => {
       const out = [];
       const seen = new Set();
       let m;
@@ -33,59 +33,117 @@ function scanPageForSensitiveInfo() {
         if (!value || seen.has(value)) continue;
         seen.add(value);
 
-        const start = Math.max(0, m.index - 30);
-        const end = Math.min(text.length, m.index + raw.length + 30);
+        const start = Math.max(0, m.index - 40);
+        const end = Math.min(text.length, m.index + raw.length + 40);
         const snippet = text.slice(start, end).replace(/\s+/g, ' ').trim();
 
-        out.push({ category, value, confidence, snippet });
+        out.push({ category, value, risk_level: riskLevel, snippet, badge: '' });
       }
-      return out.sort((a, b) => a.value.localeCompare(b.value));
+      return out;
     };
 
-    const bodyText = (document.body && document.body.innerText) ? document.body.innerText : '';
+    const bodyTextRaw = (document.body && document.body.innerText) ? document.body.innerText : '';
 
-    const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-    const ipRegex = /\b((25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\.){3}(25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\b/g;
-    const phoneRegex = /(\+[\d\s.-]{7,15})|\b(06[\s.-]?\d{8})\b/g;
+    // Ignore common non-web schemes to reduce noisy context findings.
+    const bodyText = bodyTextRaw
+      .replace(/javascript:[^\s)]+/gi, ' ')
+      .replace(/data:[^\s)]+/gi, ' ')
+      .replace(/mailto:[^\s)]+/gi, ' ')
+      .replace(/tel:[^\s)]+/gi, ' ');
 
-    const highKeywordRegex = /(api[-_ ]?key|secret[-_ ]?key|private[-_ ]?key|authorization\s*:\s*bearer|bearer\s+[a-z0-9\-_.]+|passwd|password)/gi;
-    const mediumKeywordRegex = /(token|secret|credential|auth\s?token)/gi;
-    const lowKeywordRegex = /(internal)/gi;
-
-    const emails = collectWithSnippetsLocal(
-      bodyText,
-      emailRegex,
-      'email',
-      'high',
-      (v) => v.toLowerCase()
-    ).filter((x) => !x.value.endsWith('@example.com') && !x.value.startsWith('noreply@'));
-
-    const ips = collectWithSnippetsLocal(bodyText, ipRegex, 'ip', 'medium');
-    const phones = collectWithSnippetsLocal(bodyText, phoneRegex, 'phone', 'medium', (v) => v.trim());
-
-    const keywords = [
-      ...collectWithSnippetsLocal(bodyText, highKeywordRegex, 'keyword', 'high', (v) => v.toLowerCase()),
-      ...collectWithSnippetsLocal(bodyText, mediumKeywordRegex, 'keyword', 'medium', (v) => v.toLowerCase()),
-      ...collectWithSnippetsLocal(bodyText, lowKeywordRegex, 'keyword', 'low', (v) => v.toLowerCase()),
+    const scanners = [
+      {
+        category: 'email',
+        regex: /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g,
+        risk: 'high',
+        normaliser: (v) => v.toLowerCase(),
+      },
+      {
+        category: 'ip',
+        regex: /\b((25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\.){3}(25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\b/g,
+        risk: 'medium',
+      },
+      {
+        category: 'phone',
+        regex: /(\+[\d\s.-]{7,15})|\b(06[\s.-]?\d{8})\b/g,
+        risk: 'medium',
+        normaliser: (v) => v.trim(),
+      },
+      {
+        category: 'keyword',
+        regex: /(api[-_ ]?key|secret[-_ ]?key|private[-_ ]?key|authorization\s*:\s*bearer|bearer\s+[a-z0-9\-_.]+|passwd|password)/gi,
+        risk: 'high',
+        normaliser: (v) => v.toLowerCase(),
+      },
+      {
+        category: 'keyword',
+        regex: /(token|secret|credential|auth\s?token)/gi,
+        risk: 'medium',
+        normaliser: (v) => v.toLowerCase(),
+      },
+      {
+        category: 'keyword',
+        regex: /(internal)/gi,
+        risk: 'low',
+        normaliser: (v) => v.toLowerCase(),
+      },
     ];
 
-    const keywordMap = new Map();
-    for (const k of keywords) {
-      const existing = keywordMap.get(k.value);
-      if (!existing) {
-        keywordMap.set(k.value, k);
-        continue;
+    const findings = [];
+    scanners.forEach((scanner) => {
+      findings.push(...collectWithSnippetsLocal(bodyText, scanner.regex, scanner.category, scanner.risk, scanner.normaliser));
+    });
+
+    // Clean common low-value addresses.
+    const filtered = findings.filter((f) => {
+      if (f.category !== 'email') return true;
+      const v = String(f.value || '');
+      if (v.endsWith('@example.com')) return false;
+      if (v.startsWith('noreply@')) return false;
+      return true;
+    });
+
+    // Special risk logic: IMDS endpoint is critical cloud metadata exposure.
+    filtered.forEach((f) => {
+      if (f.category === 'ip' && f.value === '169.254.169.254') {
+        f.risk_level = 'critical';
+        f.badge = 'Cloud Metadata';
       }
-      const rank = { high: 3, medium: 2, low: 1 };
-      if (rank[k.confidence] > rank[existing.confidence]) {
-        keywordMap.set(k.value, k);
+    });
+
+    // Keyword weighting for API key and credential with assignment operators.
+    filtered.forEach((f) => {
+      if (f.category !== 'keyword') return;
+      const value = String(f.value || '').toLowerCase();
+      const snippet = String(f.snippet || '');
+      const hasAssignment = /[:=]/.test(snippet);
+      if (/(api[-_ ]?key|credential)/i.test(value)) {
+        f.risk_level = hasAssignment ? 'high' : 'medium';
       }
-    }
+    });
+
+    // Deduplicate keywords by value, keeping highest risk finding.
+    const dedupeByValueKeepHighest = (items) => {
+      const map = new Map();
+      items.forEach((item) => {
+        const key = String(item.value || '');
+        const existing = map.get(key);
+        if (!existing || riskRank(item.risk_level) > riskRank(existing.risk_level)) {
+          map.set(key, item);
+        }
+      });
+      return Array.from(map.values());
+    };
+
+    const emails = sortFindings(filtered.filter((x) => x.category === 'email'));
+    const ips = sortFindings(filtered.filter((x) => x.category === 'ip'));
+    const phones = sortFindings(filtered.filter((x) => x.category === 'phone'));
+    const keywords = sortFindings(dedupeByValueKeepHighest(filtered.filter((x) => x.category === 'keyword')));
 
     return {
       emails,
       ips,
-      keywords: Array.from(keywordMap.values()).sort((a, b) => a.value.localeCompare(b.value)),
+      keywords,
       phones,
       _scan_error: null,
     };
@@ -107,12 +165,12 @@ function showError(msg) {
 function copyToClipboard(text, button) {
   navigator.clipboard.writeText(text).then(() => {
     const originalText = button.textContent;
-    button.textContent = 'Copied!';
+    button.textContent = '✔';
     button.style.backgroundColor = '#28a745';
     setTimeout(() => {
       button.textContent = originalText;
       button.style.backgroundColor = '';
-    }, 1200);
+    }, 1000);
   }).catch((err) => {
     console.error('Clipboard failed:', err);
   });
@@ -134,12 +192,13 @@ function download(name, content, type) {
 }
 
 function exportToCSV(data) {
-  const csvRows = ['Category,Value,Confidence,Snippet'];
+  const csvRows = ['Category,Value,RiskLevel,Snippet,Badge'];
   const addRows = (category, items) => items.forEach((item) => csvRows.push([
     escapeCsv(category),
     escapeCsv(item.value),
-    escapeCsv(item.confidence || ''),
-    escapeCsv(item.snippet || ''),
+    escapeCsv(item.risk_level || ''),
+    escapeCsv(decodeSnippet(item.snippet || '')),
+    escapeCsv(item.badge || ''),
   ].join(',')));
   addRows('Emails', data.emails);
   addRows('IP Addresses', data.ips);
@@ -149,7 +208,14 @@ function exportToCSV(data) {
 }
 
 function exportToJSON(data) {
-  download('sensitive_info.json', `${JSON.stringify(data, null, 2)}\n`, 'application/json');
+  const normalised = {
+    ...data,
+    emails: (data.emails || []).map((x) => ({ ...x, snippet: decodeSnippet(x.snippet) })),
+    ips: (data.ips || []).map((x) => ({ ...x, snippet: decodeSnippet(x.snippet) })),
+    keywords: (data.keywords || []).map((x) => ({ ...x, snippet: decodeSnippet(x.snippet) })),
+    phones: (data.phones || []).map((x) => ({ ...x, snippet: decodeSnippet(x.snippet) })),
+  };
+  download('sensitive_info.json', `${JSON.stringify(normalised, null, 2)}\n`, 'application/json');
 }
 
 function allItems(data) {
@@ -191,15 +257,22 @@ function renderResults(data) {
       const meta = document.createElement('div');
       meta.className = 'result-meta';
 
-      const confidence = (item.confidence || 'unknown').toLowerCase();
-      const confPill = document.createElement('span');
-      confPill.className = `confidence-pill confidence-${confidence}`;
-      confPill.textContent = confidence;
+      const risk = (item.risk_level || 'unknown').toLowerCase();
+      const riskPill = document.createElement('span');
+      riskPill.className = `confidence-pill confidence-${risk}`;
+      riskPill.textContent = risk;
+
+      meta.appendChild(riskPill);
+
+      if (item.badge) {
+        const badge = document.createElement('span');
+        badge.className = 'finding-badge';
+        badge.textContent = item.badge;
+        meta.appendChild(badge);
+      }
 
       const snippet = document.createElement('span');
-      snippet.textContent = ` ${item.snippet || ''}`;
-
-      meta.appendChild(confPill);
+      snippet.textContent = ` ${decodeSnippet(item.snippet || '')}`;
       meta.appendChild(snippet);
 
       block.appendChild(resultText);
@@ -207,7 +280,9 @@ function renderResults(data) {
 
       const copyBtn = document.createElement('button');
       copyBtn.className = 'copy-btn';
-      copyBtn.textContent = 'Copy';
+      copyBtn.innerHTML = '📋';
+      copyBtn.title = 'Copy value';
+      copyBtn.setAttribute('aria-label', `Copy ${item.value}`);
       copyBtn.addEventListener('click', () => copyToClipboard(item.value, copyBtn));
 
       resultItem.appendChild(block);
@@ -233,7 +308,6 @@ function isScriptableUrl(url) {
     'view-source:',
   ];
   if (blockedPrefixes.some((p) => url.startsWith(p))) return false;
-  // Chrome Web Store and extension gallery pages are blocked from scripting.
   if (url.includes('chromewebstore.google.com') || url.includes('chrome.google.com/webstore')) return false;
   return /^https?:\/\//i.test(url);
 }
