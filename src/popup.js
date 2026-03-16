@@ -23,6 +23,19 @@ function sortFindings(items) {
 
 function scanPageForSensitiveInfo() {
   try {
+    const riskRankLocal = (level) => {
+      const rank = { critical: 4, high: 3, medium: 2, low: 1, unknown: 0 };
+      return rank[String(level || 'unknown').toLowerCase()] ?? 0;
+    };
+
+    const sortFindingsLocal = (items) => {
+      return [...(items || [])].sort((a, b) => {
+        const r = riskRankLocal(b.risk_level) - riskRankLocal(a.risk_level);
+        if (r !== 0) return r;
+        return String(a.value || '').localeCompare(String(b.value || ''));
+      });
+    };
+
     const collectWithSnippetsLocal = (text, regex, category, riskLevel, normaliser) => {
       const out = [];
       const seen = new Set();
@@ -128,17 +141,17 @@ function scanPageForSensitiveInfo() {
       items.forEach((item) => {
         const key = String(item.value || '');
         const existing = map.get(key);
-        if (!existing || riskRank(item.risk_level) > riskRank(existing.risk_level)) {
+        if (!existing || riskRankLocal(item.risk_level) > riskRankLocal(existing.risk_level)) {
           map.set(key, item);
         }
       });
       return Array.from(map.values());
     };
 
-    const emails = sortFindings(filtered.filter((x) => x.category === 'email'));
-    const ips = sortFindings(filtered.filter((x) => x.category === 'ip'));
-    const phones = sortFindings(filtered.filter((x) => x.category === 'phone'));
-    const keywords = sortFindings(dedupeByValueKeepHighest(filtered.filter((x) => x.category === 'keyword')));
+    const emails = sortFindingsLocal(filtered.filter((x) => x.category === 'email'));
+    const ips = sortFindingsLocal(filtered.filter((x) => x.category === 'ip'));
+    const phones = sortFindingsLocal(filtered.filter((x) => x.category === 'phone'));
+    const keywords = sortFindingsLocal(dedupeByValueKeepHighest(filtered.filter((x) => x.category === 'keyword')));
 
     return {
       emails,
