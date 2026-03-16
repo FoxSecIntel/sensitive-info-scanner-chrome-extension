@@ -1,4 +1,4 @@
-![Version](https://img.shields.io/badge/version-1.1.0-blue)
+![Version](https://img.shields.io/badge/version-1.1.15-blue)
 
 # Sensitive Info Scanner Chrome Extension
 
@@ -19,6 +19,9 @@ It is intended for triage and investigation support, not as a full DLP solution.
 - One-click scan from popup
 - Grouped findings with per-item copy button
 - Count per finding category
+- Confidence labels per finding
+- Context snippets around each matched value for faster triage
+- Improved keyword quality tiers (high, medium, low confidence)
 - Copy all findings in one action
 - Export findings to CSV and JSON
 - Local processing in browser context
@@ -82,8 +85,8 @@ zip -r ../sensitive-info-scanner-upload.zip .
 ## Roadmap ideas
 
 - Add domain and URL extraction mode
-- Add severity scoring and confidence labels
-- Add JSON export option
+- Add severity scoring by finding category and source context
+- Add category filters in popup
 - Add de-duplication normalisation for large pages
 
 ## Licence

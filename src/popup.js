@@ -2,21 +2,71 @@ function uniqueSorted(items) {
   return Array.from(new Set((items || []).filter(Boolean))).sort((a, b) => a.localeCompare(b));
 }
 
+function collectWithSnippets(text, regex, category, confidence, normaliser) {
+  const out = [];
+  const seen = new Set();
+  let m;
+  while ((m = regex.exec(text)) !== null) {
+    const raw = m[0];
+    const value = normaliser ? normaliser(raw) : raw;
+    if (!value || seen.has(value)) continue;
+    seen.add(value);
+
+    const start = Math.max(0, m.index - 30);
+    const end = Math.min(text.length, m.index + raw.length + 30);
+    const snippet = text.slice(start, end).replace(/\s+/g, ' ').trim();
+
+    out.push({ category, value, confidence, snippet });
+  }
+  return out.sort((a, b) => a.value.localeCompare(b.value));
+}
+
 function scanPageForSensitiveInfo() {
-  const uniqueSortedLocal = (items) => Array.from(new Set((items || []).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+  const bodyText = (document.body && document.body.innerText) ? document.body.innerText : '';
 
   const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
   const ipRegex = /\b((25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\.){3}(25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\b/g;
-  const keywordRegex = /(password|secret|api[-_]?key|token|internal)/gi;
   const phoneRegex = /(\+[\d\s.-]{7,15})|\b(06[\s.-]?\d{8})\b/g;
 
-  const bodyText = (document.body && document.body.innerText) ? document.body.innerText : '';
+  const highKeywordRegex = /(api[-_ ]?key|secret[-_ ]?key|private[-_ ]?key|authorization\s*:\s*bearer|bearer\s+[a-z0-9\-_.]+|passwd|password)/gi;
+  const mediumKeywordRegex = /(token|secret|credential|auth\s?token)/gi;
+  const lowKeywordRegex = /(internal)/gi;
+
+  const emails = collectWithSnippets(
+    bodyText,
+    emailRegex,
+    'email',
+    'high',
+    (v) => v.toLowerCase()
+  ).filter((x) => !x.value.endsWith('@example.com') && !x.value.startsWith('noreply@'));
+
+  const ips = collectWithSnippets(bodyText, ipRegex, 'ip', 'medium');
+  const phones = collectWithSnippets(bodyText, phoneRegex, 'phone', 'medium', (v) => v.trim());
+
+  const keywords = [
+    ...collectWithSnippets(bodyText, highKeywordRegex, 'keyword', 'high', (v) => v.toLowerCase()),
+    ...collectWithSnippets(bodyText, mediumKeywordRegex, 'keyword', 'medium', (v) => v.toLowerCase()),
+    ...collectWithSnippets(bodyText, lowKeywordRegex, 'keyword', 'low', (v) => v.toLowerCase()),
+  ];
+
+  const keywordMap = new Map();
+  for (const k of keywords) {
+    const existing = keywordMap.get(k.value);
+    if (!existing) {
+      keywordMap.set(k.value, k);
+      continue;
+    }
+    const rank = { high: 3, medium: 2, low: 1 };
+    if (rank[k.confidence] > rank[existing.confidence]) {
+      keywordMap.set(k.value, k);
+    }
+  }
 
   return {
-    emails: uniqueSortedLocal(bodyText.match(emailRegex)),
-    ips: uniqueSortedLocal(bodyText.match(ipRegex)),
-    keywords: uniqueSortedLocal((bodyText.match(keywordRegex) || []).map((x) => x.toLowerCase())),
-    phones: uniqueSortedLocal(bodyText.match(phoneRegex)),
+    emails,
+    ips,
+    keywords: Array.from(keywordMap.values()).sort((a, b) => a.value.localeCompare(b.value)),
+    phones,
   };
 }
 
@@ -54,8 +104,13 @@ function download(name, content, type) {
 }
 
 function exportToCSV(data) {
-  const csvRows = ['Category,Value'];
-  const addRows = (category, items) => items.forEach((item) => csvRows.push(`${escapeCsv(category)},${escapeCsv(item)}`));
+  const csvRows = ['Category,Value,Confidence,Snippet'];
+  const addRows = (category, items) => items.forEach((item) => csvRows.push([
+    escapeCsv(category),
+    escapeCsv(item.value),
+    escapeCsv(item.confidence || ''),
+    escapeCsv(item.snippet || ''),
+  ].join(',')));
   addRows('Emails', data.emails);
   addRows('IP Addresses', data.ips);
   addRows('Keywords', data.keywords);
@@ -69,10 +124,10 @@ function exportToJSON(data) {
 
 function allItems(data) {
   return [
-    ...data.emails.map((x) => `email:${x}`),
-    ...data.ips.map((x) => `ip:${x}`),
-    ...data.keywords.map((x) => `keyword:${x}`),
-    ...data.phones.map((x) => `phone:${x}`),
+    ...data.emails.map((x) => `email:${x.value}`),
+    ...data.ips.map((x) => `ip:${x.value}`),
+    ...data.keywords.map((x) => `keyword:${x.value}`),
+    ...data.phones.map((x) => `phone:${x.value}`),
   ].join('\n');
 }
 
@@ -96,16 +151,26 @@ function renderResults(data) {
       const resultItem = document.createElement('div');
       resultItem.className = 'result-item';
 
+      const block = document.createElement('div');
+      block.className = 'result-block';
+
       const resultText = document.createElement('span');
       resultText.className = 'result-text';
-      resultText.textContent = item;
+      resultText.textContent = item.value;
+
+      const meta = document.createElement('div');
+      meta.className = 'result-meta';
+      meta.textContent = `confidence=${item.confidence || 'unknown'} | ${item.snippet || ''}`;
+
+      block.appendChild(resultText);
+      block.appendChild(meta);
 
       const copyBtn = document.createElement('button');
       copyBtn.className = 'copy-btn';
       copyBtn.textContent = 'Copy';
-      copyBtn.addEventListener('click', () => copyToClipboard(item, copyBtn));
+      copyBtn.addEventListener('click', () => copyToClipboard(item.value, copyBtn));
 
-      resultItem.appendChild(resultText);
+      resultItem.appendChild(block);
       resultItem.appendChild(copyBtn);
       resultElement.appendChild(resultItem);
     });
