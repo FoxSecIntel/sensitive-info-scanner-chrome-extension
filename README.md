@@ -96,4 +96,4 @@ zip -r ../sensitive-info-scanner-upload.zip .
 
 ## Licence
 
-MIT
+Apache License 2.0
