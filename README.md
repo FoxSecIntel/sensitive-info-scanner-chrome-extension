@@ -94,6 +94,6 @@ zip -r ../sensitive-info-scanner-upload.zip .
 - Add category filters in popup
 - Add de-duplication normalisation for large pages
 
-## Licence
+## License
 
 Apache License 2.0
