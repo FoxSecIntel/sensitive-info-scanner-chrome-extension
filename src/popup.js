@@ -100,6 +100,37 @@ function scanPageForSensitiveInfo(options = {}) {
         risk: 'medium',
         normaliser: (v) => v.replace(/\s+/g, ' ').trim(),
       },
+      // High-signal secret patterns
+      {
+        category: 'secret',
+        regex: /\bAKIA[0-9A-Z]{16}\b/g,
+        risk: 'critical',
+        normaliser: (v) => v.trim(),
+      },
+      {
+        category: 'secret',
+        regex: /\bAIza[0-9A-Za-z\-_]{35}\b/g,
+        risk: 'high',
+        normaliser: (v) => v.trim(),
+      },
+      {
+        category: 'secret',
+        regex: /\bghp_[A-Za-z0-9]{36}\b/g,
+        risk: 'critical',
+        normaliser: (v) => v.trim(),
+      },
+      {
+        category: 'secret',
+        regex: /\bgithub_pat_[A-Za-z0-9_]{20,}\b/g,
+        risk: 'critical',
+        normaliser: (v) => v.trim(),
+      },
+      {
+        category: 'secret',
+        regex: /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/g,
+        risk: 'high',
+        normaliser: (v) => v.trim(),
+      },
       {
         category: 'keyword',
         regex: /(api[-_ ]?key|secret[-_ ]?key|private[-_ ]?key|authorization\s*:\s*bearer|bearer\s+[a-z0-9\-_.]+|passwd|password)/gi,
@@ -193,14 +224,30 @@ function scanPageForSensitiveInfo(options = {}) {
       }
     });
 
-    // Keyword weighting for API key and credential with assignment operators.
+    // Keyword and secret context weighting with assignment and auth-context cues.
     filtered.forEach((f) => {
-      if (f.category !== 'keyword') return;
       const value = String(f.value || '').toLowerCase();
       const snippet = String(f.snippet || '');
+      const snippetLc = snippet.toLowerCase();
       const hasAssignment = /[:=]/.test(snippet);
-      if (/(api[-_ ]?key|credential)/i.test(value)) {
-        f.risk_level = hasAssignment ? 'high' : 'medium';
+      const authContext = /(authorization|bearer|private[_ -]?key|begin\s+private\s+key|secret[_ -]?key|api[_ -]?key)/i.test(snippetLc);
+
+      if (f.category === 'secret') {
+        if (authContext) {
+          f.risk_level = 'critical';
+          f.badge = f.badge || 'Auth Context';
+        }
+        return;
+      }
+
+      if (f.category !== 'keyword') return;
+
+      if (/(api[-_ ]?key|credential|secret[-_ ]?key|private[-_ ]?key)/i.test(value)) {
+        f.risk_level = (hasAssignment || authContext) ? 'high' : 'medium';
+      }
+
+      if (/(token|auth\s?token|bearer)/i.test(value) && (hasAssignment || authContext)) {
+        f.risk_level = 'high';
       }
     });
 
@@ -208,7 +255,7 @@ function scanPageForSensitiveInfo(options = {}) {
     const dedupeByValueKeepHighest = (items) => {
       const map = new Map();
       items.forEach((item) => {
-        const key = String(item.value || '');
+        const key = `${String(item.category || '')}:${String(item.value || '')}`;
         const existing = map.get(key);
         if (!existing || riskRankLocal(item.risk_level) > riskRankLocal(existing.risk_level)) {
           map.set(key, item);
@@ -221,12 +268,14 @@ function scanPageForSensitiveInfo(options = {}) {
     const ips = sortFindingsLocal(filtered.filter((x) => x.category === 'ip'));
     const phones = sortFindingsLocal(filtered.filter((x) => x.category === 'phone'));
     const keywords = sortFindingsLocal(dedupeByValueKeepHighest(filtered.filter((x) => x.category === 'keyword')));
+    const secrets = sortFindingsLocal(dedupeByValueKeepHighest(filtered.filter((x) => x.category === 'secret')));
 
     return {
       emails,
       ips,
       keywords,
       phones,
+      secrets,
       _scan_error: null,
       _scan_depth: scanDepth,
       _meta: {
@@ -241,6 +290,7 @@ function scanPageForSensitiveInfo(options = {}) {
       ips: [],
       keywords: [],
       phones: [],
+      secrets: [],
       _scan_depth: (options && options.depth) === 'deep' ? 'deep' : 'quick',
       _scan_error: String(e && e.message ? e.message : e),
     };
@@ -332,6 +382,7 @@ function exportToCSV(data, meta = {}) {
   addRows('IP Addresses', data.ips);
   addRows('Keywords', data.keywords);
   addRows('Phone Numbers', data.phones);
+  addRows('Secrets', data.secrets || []);
   download('sensitive_info.csv', `${csvRows.join('\n')}\n`, 'text/csv');
 }
 
@@ -345,6 +396,7 @@ function exportToJSON(data, meta = {}) {
     ips: (data.ips || []).map((x) => ({ ...x, snippet: decodeSnippet(x.snippet) })),
     keywords: (data.keywords || []).map((x) => ({ ...x, snippet: decodeSnippet(x.snippet) })),
     phones: (data.phones || []).map((x) => ({ ...x, snippet: decodeSnippet(x.snippet) })),
+    secrets: (data.secrets || []).map((x) => ({ ...x, snippet: decodeSnippet(x.snippet) })),
   };
   download('sensitive_info.json', `${JSON.stringify(normalised, null, 2)}\n`, 'application/json');
 }
@@ -355,6 +407,7 @@ function allItems(data) {
     ...data.ips.map((x) => `ip:${x.value}`),
     ...data.keywords.map((x) => `keyword:${x.value}`),
     ...data.phones.map((x) => `phone:${x.value}`),
+    ...(data.secrets || []).map((x) => `secret:${x.value}`),
   ].join('\n');
 }
 
@@ -440,6 +493,7 @@ function renderResults(data) {
   displayResults('IP Addresses', data.ips);
   displayResults('Keywords', data.keywords);
   displayResults('Phone Numbers', data.phones);
+  displayResults('Secrets', data.secrets || []);
 }
 
 function isScriptableUrl(url) {
@@ -498,7 +552,7 @@ document.addEventListener('DOMContentLoaded', () => {
           return;
         }
 
-        const data = results[0].result || { emails: [], ips: [], keywords: [], phones: [], _scan_error: 'empty_result' };
+        const data = results[0].result || { emails: [], ips: [], keywords: [], phones: [], secrets: [], _scan_error: 'empty_result' };
         const exportMeta = {
           page_url: data?._meta?.page_url || tabUrl,
           page_title: data?._meta?.page_title || tab?.title || '',
