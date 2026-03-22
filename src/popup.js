@@ -328,25 +328,32 @@ async function writeClipboardSafe(text) {
   }
 }
 
-async function copyToClipboard(text, button) {
+function flashButtonState(button, text, bg, fg = '#fff', ms = 900) {
   const originalText = button.textContent;
-  const ok = await writeClipboardSafe(text);
+  const originalBg = button.style.backgroundColor;
+  const originalFg = button.style.color;
+  const originalDisabled = button.disabled;
 
-  if (ok) {
-    button.textContent = 'Done';
-    button.style.backgroundColor = '#2e7d32';
-    button.style.color = '#fff';
-  } else {
-    button.textContent = 'Fail';
-    button.style.backgroundColor = '#b00020';
-    button.style.color = '#fff';
-  }
+  button.textContent = text;
+  button.style.backgroundColor = bg;
+  button.style.color = fg;
+  button.disabled = true;
 
   setTimeout(() => {
     button.textContent = originalText;
-    button.style.backgroundColor = '';
-    button.style.color = '';
-  }, 900);
+    button.style.backgroundColor = originalBg;
+    button.style.color = originalFg;
+    button.disabled = originalDisabled;
+  }, ms);
+}
+
+async function copyToClipboard(text, button) {
+  const ok = await writeClipboardSafe(text);
+  if (ok) {
+    flashButtonState(button, 'Done', '#2e7d32');
+  } else {
+    flashButtonState(button, 'Fail', '#b00020');
+  }
 }
 
 function escapeCsv(value) {
@@ -569,13 +576,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
         document.getElementById('copyAllBtn').onclick = async () => {
           const btn = document.getElementById('copyAllBtn');
-          const original = btn.textContent;
           const ok = await writeClipboardSafe(allItems(data));
-          btn.textContent = ok ? 'Copied' : 'Failed';
-          setTimeout(() => { btn.textContent = original; }, 900);
+          if (ok) {
+            flashButtonState(btn, 'Copied', '#2e7d32');
+          } else {
+            flashButtonState(btn, 'Failed', '#b00020');
+          }
         };
-        document.getElementById('exportCsvBtn').onclick = () => exportToCSV(data, exportMeta);
-        document.getElementById('exportJsonBtn').onclick = () => exportToJSON(data, exportMeta);
+        document.getElementById('exportCsvBtn').onclick = () => {
+          const btn = document.getElementById('exportCsvBtn');
+          exportToCSV(data, exportMeta);
+          flashButtonState(btn, 'Exported', '#1f6feb');
+        };
+        document.getElementById('exportJsonBtn').onclick = () => {
+          const btn = document.getElementById('exportJsonBtn');
+          exportToJSON(data, exportMeta);
+          flashButtonState(btn, 'Exported', '#1f6feb');
+        };
       }
     );
   });
