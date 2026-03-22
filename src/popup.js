@@ -135,9 +135,23 @@ function scanPageForSensitiveInfo(options = {}) {
       }
 
       if (f.category === 'phone') {
-        const digits = String(f.value || '').replace(/\D/g, '');
+        const raw = String(f.value || '').trim();
+        const digits = raw.replace(/\D/g, '');
+
+        // Length and obvious noise guards.
         if (digits.length < 9 || digits.length > 15) return false;
         if (/^(0000|1111|1234)/.test(digits)) return false;
+
+        // Reject IPv4-like values.
+        if (/^\d{1,3}(\.\d{1,3}){3}$/.test(raw)) return false;
+
+        // Reject common date formats.
+        if (/^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}$/.test(raw)) return false;
+        if (/^\d{4}[\/\-.]\d{1,2}[\/\-.]\d{1,2}$/.test(raw)) return false;
+
+        // Reject plain long numeric strings with no separators.
+        if (/^\d{9,15}$/.test(raw) && !raw.startsWith('+')) return false;
+
         return true;
       }
 
