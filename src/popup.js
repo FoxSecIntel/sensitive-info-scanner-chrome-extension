@@ -1,3 +1,5 @@
+const SCANNER_VERSION = '1.1.19';
+
 function decodeSnippet(text) {
   const value = String(text || '');
   // Decode URL-encoded snippets safely for analyst readability.
@@ -21,7 +23,7 @@ function sortFindings(items) {
   });
 }
 
-function scanPageForSensitiveInfo() {
+function scanPageForSensitiveInfo(options = {}) {
   try {
     const riskRankLocal = (level) => {
       const rank = { critical: 4, high: 3, medium: 2, low: 1, unknown: 0 };
@@ -55,10 +57,25 @@ function scanPageForSensitiveInfo() {
       return out;
     };
 
+    const scanDepth = (options && options.depth) === 'deep' ? 'deep' : 'quick';
+
     const bodyTextRaw = (document.body && document.body.innerText) ? document.body.innerText : '';
+    const attrTextRaw = scanDepth === 'deep'
+      ? Array.from(document.querySelectorAll('[href],[src],[aria-label],[title]'))
+          .map((el) => [
+            el.getAttribute('href') || '',
+            el.getAttribute('src') || '',
+            el.getAttribute('aria-label') || '',
+            el.getAttribute('title') || ''
+          ].join(' '))
+          .join('\n')
+      : '';
+    const inlineScriptRaw = scanDepth === 'deep'
+      ? Array.from(document.querySelectorAll('script:not([src])')).slice(0, 30).map((s) => s.textContent || '').join('\n')
+      : '';
 
     // Ignore common non-web schemes to reduce noisy context findings.
-    const bodyText = bodyTextRaw
+    const bodyText = `${bodyTextRaw}\n${attrTextRaw}\n${inlineScriptRaw}`
       .replace(/javascript:[^\s)]+/gi, ' ')
       .replace(/data:[^\s)]+/gi, ' ')
       .replace(/mailto:[^\s)]+/gi, ' ')
@@ -78,9 +95,10 @@ function scanPageForSensitiveInfo() {
       },
       {
         category: 'phone',
-        regex: /(\+[\d\s.-]{7,15})|\b(06[\s.-]?\d{8})\b/g,
+        // International and local-ish patterns, with length guard applied after normalisation.
+        regex: /\+?[0-9][0-9\s().-]{7,20}[0-9]/g,
         risk: 'medium',
-        normaliser: (v) => v.trim(),
+        normaliser: (v) => v.replace(/\s+/g, ' ').trim(),
       },
       {
         category: 'keyword',
@@ -109,10 +127,20 @@ function scanPageForSensitiveInfo() {
 
     // Clean common low-value addresses.
     const filtered = findings.filter((f) => {
-      if (f.category !== 'email') return true;
-      const v = String(f.value || '');
-      if (v.endsWith('@example.com')) return false;
-      if (v.startsWith('noreply@')) return false;
+      if (f.category === 'email') {
+        const v = String(f.value || '');
+        if (v.endsWith('@example.com')) return false;
+        if (v.startsWith('noreply@')) return false;
+        return true;
+      }
+
+      if (f.category === 'phone') {
+        const digits = String(f.value || '').replace(/\D/g, '');
+        if (digits.length < 9 || digits.length > 15) return false;
+        if (/^(0000|1111|1234)/.test(digits)) return false;
+        return true;
+      }
+
       return true;
     });
 
@@ -159,6 +187,12 @@ function scanPageForSensitiveInfo() {
       keywords,
       phones,
       _scan_error: null,
+      _scan_depth: scanDepth,
+      _meta: {
+        page_url: window.location.href,
+        page_title: document.title || '',
+        scanned_at: new Date().toISOString(),
+      },
     };
   } catch (e) {
     return {
@@ -166,6 +200,7 @@ function scanPageForSensitiveInfo() {
       ips: [],
       keywords: [],
       phones: [],
+      _scan_depth: (options && options.depth) === 'deep' ? 'deep' : 'quick',
       _scan_error: String(e && e.message ? e.message : e),
     };
   }
@@ -238,14 +273,19 @@ function download(name, content, type) {
   URL.revokeObjectURL(url);
 }
 
-function exportToCSV(data) {
-  const csvRows = ['Category,Value,RiskLevel,Snippet,Badge'];
+function exportToCSV(data, meta = {}) {
+  const csvRows = ['Category,Value,RiskLevel,Snippet,Badge,PageUrl,PageTitle,ScannedAt,ScanDepth,ScannerVersion'];
   const addRows = (category, items) => items.forEach((item) => csvRows.push([
     escapeCsv(category),
     escapeCsv(item.value),
     escapeCsv(item.risk_level || ''),
     escapeCsv(decodeSnippet(item.snippet || '')),
     escapeCsv(item.badge || ''),
+    escapeCsv(meta.page_url || ''),
+    escapeCsv(meta.page_title || ''),
+    escapeCsv(meta.scanned_at || ''),
+    escapeCsv(meta.scan_depth || ''),
+    escapeCsv(meta.scanner_version || ''),
   ].join(',')));
   addRows('Emails', data.emails);
   addRows('IP Addresses', data.ips);
@@ -254,9 +294,12 @@ function exportToCSV(data) {
   download('sensitive_info.csv', `${csvRows.join('\n')}\n`, 'text/csv');
 }
 
-function exportToJSON(data) {
+function exportToJSON(data, meta = {}) {
   const normalised = {
     ...data,
+    _export_meta: {
+      ...meta,
+    },
     emails: (data.emails || []).map((x) => ({ ...x, snippet: decodeSnippet(x.snippet) })),
     ips: (data.ips || []).map((x) => ({ ...x, snippet: decodeSnippet(x.snippet) })),
     keywords: (data.keywords || []).map((x) => ({ ...x, snippet: decodeSnippet(x.snippet) })),
@@ -374,7 +417,10 @@ function isScriptableUrl(url) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+  const depthEl = document.getElementById('scanDepth');
+
+  const runScan = () => chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    document.getElementById('error').textContent = '';
     const tab = tabs?.[0];
     const tabId = tab?.id;
     const tabUrl = tab?.url || '';
@@ -390,10 +436,13 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    const depth = depthEl?.value === 'deep' ? 'deep' : 'quick';
+
     chrome.scripting.executeScript(
       {
         target: { tabId },
         func: scanPageForSensitiveInfo,
+        args: [{ depth }],
       },
       (results) => {
         if (chrome.runtime.lastError) {
@@ -409,6 +458,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const data = results[0].result || { emails: [], ips: [], keywords: [], phones: [], _scan_error: 'empty_result' };
+        const exportMeta = {
+          page_url: data?._meta?.page_url || tabUrl,
+          page_title: data?._meta?.page_title || tab?.title || '',
+          scanned_at: data?._meta?.scanned_at || new Date().toISOString(),
+          scan_depth: data?._scan_depth || depth,
+          scanner_version: SCANNER_VERSION,
+        };
 
         if (data._scan_error) {
           showError(`Page scan error: ${data._scan_error}`);
@@ -423,9 +479,15 @@ document.addEventListener('DOMContentLoaded', () => {
           btn.textContent = ok ? 'Copied' : 'Failed';
           setTimeout(() => { btn.textContent = original; }, 900);
         };
-        document.getElementById('exportCsvBtn').onclick = () => exportToCSV(data);
-        document.getElementById('exportJsonBtn').onclick = () => exportToJSON(data);
+        document.getElementById('exportCsvBtn').onclick = () => exportToCSV(data, exportMeta);
+        document.getElementById('exportJsonBtn').onclick = () => exportToJSON(data, exportMeta);
       }
     );
   });
+
+  if (depthEl) {
+    depthEl.addEventListener('change', runScan);
+  }
+
+  runScan();
 });
