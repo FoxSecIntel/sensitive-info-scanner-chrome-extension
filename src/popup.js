@@ -146,8 +146,12 @@ function scanPageForSensitiveInfo(options = {}) {
         if (/^\d+\.\d+$/.test(raw)) return false;
         if (/^0\.\d+/.test(raw)) return false;
 
-        // Require some phone-like structure: country plus or separators.
-        const hasPhoneSeparators = /[\s()\-]/.test(raw);
+        // Reject image/file/date-like numeric IDs (e.g. 20260319-5).
+        if (/^20\d{6,}(?:-\d+)?$/.test(raw)) return false;
+
+        // Require phone-like formatting: plus, brackets, or spacing.
+        // Hyphen alone is too noisy for dates and file identifiers.
+        const hasPhoneSeparators = /[\s()]/.test(raw);
         if (!raw.startsWith('+') && !hasPhoneSeparators) return false;
 
         // Reject IPv4-like values, with or without trailing port/chunks.
@@ -155,6 +159,7 @@ function scanPageForSensitiveInfo(options = {}) {
 
         // Reject common date/date-time formats and hybrids.
         if (/^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}$/.test(raw)) return false;
+        if (/^\d{8}-\d+$/.test(raw)) return false;
         if (/^\d{4}[\/\-.]\d{1,2}[\/\-.]\d{1,2}$/.test(raw)) return false;
         if (/^\d{4}[\/\-.]\d{1,2}[\/\-.]\d{1,2}\s+\d{1,2}(:\d{2})?$/.test(raw)) return false;
         if (/^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}\s+\d{1,2}(:\d{2})?$/.test(raw)) return false;
