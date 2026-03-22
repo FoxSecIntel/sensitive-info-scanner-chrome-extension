@@ -142,14 +142,23 @@ function scanPageForSensitiveInfo(options = {}) {
         if (digits.length < 9 || digits.length > 15) return false;
         if (/^(0000|1111|1234)/.test(digits)) return false;
 
-        // Reject IPv4-like values.
-        if (/^\d{1,3}(\.\d{1,3}){3}$/.test(raw)) return false;
+        // Reject decimal/float-like values and long numeric ratios.
+        if (/^\d+\.\d+$/.test(raw)) return false;
+        if (/^0\.\d+/.test(raw)) return false;
 
-        // Reject common date/date-time formats.
+        // Require some phone-like structure: country plus or separators.
+        const hasPhoneSeparators = /[\s()\-]/.test(raw);
+        if (!raw.startsWith('+') && !hasPhoneSeparators) return false;
+
+        // Reject IPv4-like values, with or without trailing port/chunks.
+        if (/\b\d{1,3}(\.\d{1,3}){3}\b/.test(raw)) return false;
+
+        // Reject common date/date-time formats and hybrids.
         if (/^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}$/.test(raw)) return false;
         if (/^\d{4}[\/\-.]\d{1,2}[\/\-.]\d{1,2}$/.test(raw)) return false;
         if (/^\d{4}[\/\-.]\d{1,2}[\/\-.]\d{1,2}\s+\d{1,2}(:\d{2})?$/.test(raw)) return false;
         if (/^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}\s+\d{1,2}(:\d{2})?$/.test(raw)) return false;
+        if (/^\d{1,2}\s*-\s*\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}\s+\d{1,2}$/.test(raw)) return false;
 
         // Reject patterns that look like YYYY-MM-DD HH chunks.
         const parts = raw.split(/\D+/).filter(Boolean);
