@@ -145,9 +145,22 @@ function scanPageForSensitiveInfo(options = {}) {
         // Reject IPv4-like values.
         if (/^\d{1,3}(\.\d{1,3}){3}$/.test(raw)) return false;
 
-        // Reject common date formats.
+        // Reject common date/date-time formats.
         if (/^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}$/.test(raw)) return false;
         if (/^\d{4}[\/\-.]\d{1,2}[\/\-.]\d{1,2}$/.test(raw)) return false;
+        if (/^\d{4}[\/\-.]\d{1,2}[\/\-.]\d{1,2}\s+\d{1,2}(:\d{2})?$/.test(raw)) return false;
+        if (/^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}\s+\d{1,2}(:\d{2})?$/.test(raw)) return false;
+
+        // Reject patterns that look like YYYY-MM-DD HH chunks.
+        const parts = raw.split(/\D+/).filter(Boolean);
+        if (
+          parts.length >= 3 &&
+          /^(19|20)\d{2}$/.test(parts[0]) &&
+          Number(parts[1]) >= 1 && Number(parts[1]) <= 12 &&
+          Number(parts[2]) >= 1 && Number(parts[2]) <= 31
+        ) {
+          return false;
+        }
 
         // Reject plain long numeric strings with no separators.
         if (/^\d{9,15}$/.test(raw) && !raw.startsWith('+')) return false;
